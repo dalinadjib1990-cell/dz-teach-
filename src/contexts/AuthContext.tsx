@@ -17,14 +17,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       setUser(user);
       if (user) {
-        // Set online status
-        await updateDoc(doc(db, 'users', user.uid), {
+        // Fire and forget online status update
+        updateDoc(doc(db, 'users', user.uid), {
           status: 'online',
           lastSeen: new Date().toISOString()
-        }).catch(() => {}); // Ignore if doc doesn't exist yet
+        }).catch(() => {}); 
       } else {
         setProfile(null);
         setLoading(false);
@@ -36,8 +36,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (user) {
+      // Set a timeout as a fallback to prevent infinite loading
+      const timeoutId = setTimeout(() => {
+        setLoading(false);
+      }, 5000); // 5 seconds fallback
+
       const unsubscribeProfile = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+        clearTimeout(timeoutId);
         setProfile(doc.data() || null);
+        setLoading(false);
+      }, (error) => {
+        console.error("Profile Snapshot Error:", error);
+        clearTimeout(timeoutId);
         setLoading(false);
       });
 

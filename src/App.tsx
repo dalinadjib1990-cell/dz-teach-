@@ -9,8 +9,18 @@ function AppRoutes() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-dz-black flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-dz-purple border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen bg-dz-black flex flex-col items-center justify-center gap-6">
+        <div className="relative">
+          <div className="w-20 h-20 border-4 border-dz-purple/20 rounded-full"></div>
+          <div className="absolute top-0 left-0 w-20 h-20 border-4 border-dz-purple border-t-transparent rounded-full animate-spin shadow-[0_0_20px_rgba(147,51,234,0.3)]"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+            <span className="text-dz-gold font-bold text-xl">DZ</span>
+          </div>
+        </div>
+        <div className="text-center space-y-2">
+          <p className="text-dz-gold font-bold animate-pulse">جاري التحميل...</p>
+          <p className="text-zinc-500 text-xs">يرجى الانتظار قليلاً</p>
+        </div>
       </div>
     );
   }
