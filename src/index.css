@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@theme {
+  --color-dz-black: #0a0a0a;
+  --color-dz-purple: #6b21a8;
+  --color-dz-magenta: #a21caf;
+  --color-dz-gold: #fbbf24;
+  --color-dz-red: #ef4444;
+  --color-dz-yellow: #facc15;
+  
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-dz-black text-white font-sans;
+    direction: rtl;
+  }
+}
+
+.gold-text {
+  background: linear-gradient(to bottom, #fde68a, #fbbf24, #b45309);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: bold;
+  text-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+}
+
+.messenger-bubble {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 15px rgba(162, 28, 175, 0.3);
+}
+

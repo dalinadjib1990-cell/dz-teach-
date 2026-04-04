@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profile",
+      "description": "Information about the teacher",
+      "type": "object",
+      "properties": {
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "wilaya": { "type": "string" },
+        "specialty": { "type": "string" },
+        "level": { "type": "string" },
+        "experience": { "type": "number" },
+        "email": { "type": "string" },
+        "gender": { "type": "string", "enum": ["male", "female"] },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["firstName", "lastName", "wilaya", "specialty", "level", "email"]
+    },
+    "posts": {
+      "title": "Post",
+      "description": "Social media post",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorPhoto": { "type": "string" },
+        "content": { "type": "string" },
+        "privacy": { "type": "string", "enum": ["public", "friends", "me"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "reactions": { "type": "object" },
+        "commentsCount": { "type": "number" }
+      }
+    },
+    "messages": {
+      "title": "Message",
+      "description": "Chat message",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "read": { "type": "boolean" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "User profiles"
+    },
+    "/posts/{postId}": {
+      "schema": "posts",
+      "description": "User posts"
+    },
+    "/messages/{messageId}": {
+      "schema": "messages",
+      "description": "Chat messages"
+    }
+  }
+}

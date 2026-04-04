@@ -1,11 +1,19 @@
-<div align="center">
+# dz teach (Prof DZ)
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+تطبيق تواصل اجتماعي للأساتذة الجزائريين.
 
-  <h1>Built with AI Studio</h2>
+## المميزات
+- تسجيل الدخول والاشتراك (معلومات الأستاذ: الولاية، الاختصاص، الطور، سنوات الخبرة).
+- منشورات (نصية، خلفيات ملونة للمنشورات القصيرة).
+- تفاعلات (إعجاب، حب، ضحك، تعجب، حزن، غضب).
+- تعليقات وردود.
+- فقاعة محادثة عائمة (Messenger style) مع إيموجي متحرك.
+- عرض معلومات الأستاذ في المحادثة.
+- أصوات تنبيهات ورنين.
 
-  <p>The fastest path from prompt to production with Gemini.</p>
-
-  <a href="https://aistudio.google.com/apps">Start building</a>
-
-</div>
+## التقنيات المستخدمة
+- React + Vite
+- Tailwind CSS
+- Firebase (Auth, Firestore)
+- Framer Motion (للحركات والفقاعة العائمة)
+- Lucide React (للأيقونات)

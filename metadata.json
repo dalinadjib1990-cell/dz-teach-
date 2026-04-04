@@ -1,0 +1,9 @@
+{
+  "name": "dz teach",
+  "description": "منصة تواصل اجتماعي مخصصة للأساتذة الجزائريين - Prof DZ",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
