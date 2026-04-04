@@ -136,43 +136,117 @@ export default function Home() {
         </div>
       </nav>
 
-      <main className="max-w-2xl mx-auto p-4 space-y-6">
-        {/* Create Post */}
-        <div className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800">
-          <div className="flex gap-3 mb-4">
-            <img 
-              src={profile?.photoURL || user?.photoURL || `https://ui-avatars.com/api/?name=${profile?.firstName || 'User'}&background=6b21a8&color=fff`} 
-              alt="Profile" 
-              className="w-10 h-10 rounded-full"
-            />
-            <textarea 
-              placeholder={`بماذا تفكر يا ${profile?.gender === 'female' ? 'أستاذة' : 'أستاذ'} ${profile?.lastName || ''}؟`}
-              className="flex-1 bg-black/30 rounded-xl p-3 text-sm outline-none border border-transparent focus:border-dz-purple/50 resize-none min-h-[80px]"
-              value={newPost}
-              onChange={e => setNewPost(e.target.value)}
-            />
-          </div>
-          <div className="flex justify-between items-center pt-2 border-t border-zinc-800">
-            <div className="flex gap-4">
-              <button className="flex items-center gap-2 text-zinc-500 hover:text-dz-purple text-sm">
-                <Smile className="w-5 h-5" /> شعور
-              </button>
+      <main className="max-w-6xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Sidebar - Suggested Teachers */}
+        <div className="hidden lg:block lg:col-span-3 space-y-4">
+          <div className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800 sticky top-20">
+            <h3 className="text-dz-gold font-bold mb-4 flex items-center gap-2">
+              <UserPlus className="w-5 h-5" /> أساتذة قد تعرفهم
+            </h3>
+            <div className="space-y-4">
+              {onlineUsers.length === 0 && (
+                <p className="text-xs text-zinc-500 text-center py-4">لا يوجد أساتذة متاحون حالياً</p>
+              )}
+              {onlineUsers.slice(0, 5).map(u => (
+                <div 
+                  key={u.uid}
+                  onClick={() => {
+                    setSelectedChatUser(u);
+                    setIsChatOpen(true);
+                  }}
+                  className="flex items-center gap-3 p-2 hover:bg-white/5 rounded-xl cursor-pointer transition-colors group"
+                >
+                  <div className="relative">
+                    <img 
+                      src={u.photoURL || `https://ui-avatars.com/api/?name=${u.firstName}+${u.lastName}&background=6b21a8&color=fff`} 
+                      className="w-10 h-10 rounded-full border border-zinc-800"
+                    />
+                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-zinc-900" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-xs truncate group-hover:text-dz-purple transition-colors">{u.firstName} {u.lastName}</p>
+                    <p className="text-[9px] text-zinc-500 truncate">{u.specialty} | {u.level}</p>
+                  </div>
+                </div>
+              ))}
             </div>
             <button 
-              onClick={handleCreatePost}
-              disabled={loading || !newPost.trim()}
-              className="bg-dz-purple hover:bg-dz-purple/80 text-white px-6 py-1.5 rounded-lg text-sm font-bold transition-all disabled:opacity-50"
+              onClick={() => setIsUsersListOpen(true)}
+              className="w-full mt-4 py-2 text-xs font-bold text-dz-purple hover:bg-dz-purple/10 rounded-lg transition-colors"
             >
-              نشر
+              عرض الكل
             </button>
           </div>
         </div>
 
-        {/* Posts List */}
-        <div className="space-y-4">
-          {posts.map(post => (
-            <PostCard key={post.id} post={post} />
-          ))}
+        {/* Main Feed */}
+        <div className="lg:col-span-6 space-y-6">
+          {/* Create Post */}
+          <div className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800 shadow-xl">
+            <div className="flex gap-3 mb-4">
+              <img 
+                src={profile?.photoURL || user?.photoURL || `https://ui-avatars.com/api/?name=${profile?.firstName || 'User'}&background=6b21a8&color=fff`} 
+                alt="Profile" 
+                className="w-10 h-10 rounded-full border border-dz-purple/30"
+              />
+              <textarea 
+                placeholder={`بماذا تفكر يا ${profile?.gender === 'female' ? 'أستاذة' : 'أستاذ'} ${profile?.lastName || ''}؟`}
+                className="flex-1 bg-black/30 rounded-xl p-3 text-sm outline-none border border-transparent focus:border-dz-purple/50 resize-none min-h-[80px] transition-all"
+                value={newPost}
+                onChange={e => setNewPost(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-between items-center pt-2 border-t border-zinc-800">
+              <div className="flex gap-4">
+                <button className="flex items-center gap-2 text-zinc-500 hover:text-dz-purple text-sm transition-colors">
+                  <Smile className="w-5 h-5" /> شعور
+                </button>
+              </div>
+              <button 
+                onClick={handleCreatePost}
+                disabled={loading || !newPost.trim()}
+                className="bg-dz-purple hover:bg-dz-purple/80 text-white px-8 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-50 shadow-lg shadow-dz-purple/20"
+              >
+                نشر الآن
+              </button>
+            </div>
+          </div>
+
+          {/* Posts List */}
+          <div className="space-y-4">
+            {posts.map(post => (
+              <PostCard key={post.id} post={post} />
+            ))}
+          </div>
+        </div>
+
+        {/* Right Sidebar - Stats/Info */}
+        <div className="hidden lg:block lg:col-span-3 space-y-4">
+          <div className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800 sticky top-20">
+            <div className="text-center space-y-3">
+              <div className="relative inline-block">
+                <img 
+                  src={profile?.photoURL || user?.photoURL || `https://ui-avatars.com/api/?name=${profile?.firstName || 'User'}&background=6b21a8&color=fff`} 
+                  className="w-20 h-20 rounded-full border-4 border-dz-purple mx-auto object-cover"
+                />
+                <div className="absolute bottom-0 right-0 bg-green-500 w-5 h-5 rounded-full border-4 border-zinc-900" />
+              </div>
+              <div>
+                <h4 className="font-bold text-dz-gold">{profile?.firstName} {profile?.lastName}</h4>
+                <p className="text-[10px] text-zinc-500">{profile?.specialty} - {profile?.level}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-4 border-t border-zinc-800">
+                <div className="text-center">
+                  <p className="text-xs font-bold text-dz-purple">{profile?.experience || 0}</p>
+                  <p className="text-[8px] text-zinc-500">سنوات الخبرة</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs font-bold text-dz-purple">{posts.filter(p => p.authorId === user?.uid).length}</p>
+                  <p className="text-[8px] text-zinc-500">منشوراتك</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </main>
 
@@ -428,6 +502,15 @@ function PostCard({ post }: any) {
     wow: <Zap className="w-4 h-4 text-dz-magenta" />,
     sad: <Frown className="w-4 h-4 text-dz-gold" />,
     angry: <Angry className="w-4 h-4 text-dz-red" />
+  };
+
+  const reactionLabels: any = {
+    like: 'أعجبني',
+    love: 'أحببته',
+    haha: 'أضحكني',
+    wow: 'أبهرني',
+    sad: 'أحزنني',
+    angry: 'أغضبني'
   };
 
   return (
