@@ -27,12 +27,21 @@ export default function Home() {
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
 
   useEffect(() => {
-    const q = query(collection(db, 'users'), where('status', '==', 'online'));
+    // Fetch all users who have completed their profile
+    const q = query(collection(db, 'users'), limit(50));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setOnlineUsers(snapshot.docs
+      const users = snapshot.docs
         .map(doc => ({ uid: doc.id, ...doc.data() }))
-        .filter(u => u.uid !== user?.uid)
-      );
+        .filter(u => u.uid !== user?.uid && !u.incomplete);
+      
+      // Sort: online users first, then by creation date
+      const sortedUsers = [...users].sort((a: any, b: any) => {
+        if (a.status === 'online' && b.status !== 'online') return -1;
+        if (a.status !== 'online' && b.status === 'online') return 1;
+        return 0;
+      });
+      
+      setOnlineUsers(sortedUsers);
     });
     return () => unsubscribe();
   }, [user]);
@@ -147,26 +156,37 @@ export default function Home() {
               {onlineUsers.length === 0 && (
                 <p className="text-xs text-zinc-500 text-center py-4">لا يوجد أساتذة متاحون حالياً</p>
               )}
-              {onlineUsers.slice(0, 5).map(u => (
+              {onlineUsers.map(u => (
                 <div 
                   key={u.uid}
-                  onClick={() => {
-                    setSelectedChatUser(u);
-                    setIsChatOpen(true);
-                  }}
-                  className="flex items-center gap-3 p-2 hover:bg-white/5 rounded-xl cursor-pointer transition-colors group"
+                  className="bg-black/20 p-3 rounded-xl border border-zinc-800/50 group hover:border-dz-purple/50 transition-all"
                 >
-                  <div className="relative">
-                    <img 
-                      src={u.photoURL || `https://ui-avatars.com/api/?name=${u.firstName}+${u.lastName}&background=6b21a8&color=fff`} 
-                      className="w-10 h-10 rounded-full border border-zinc-800"
-                    />
-                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-zinc-900" />
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="relative">
+                      <img 
+                        src={u.photoURL || `https://ui-avatars.com/api/?name=${u.firstName}+${u.lastName}&background=6b21a8&color=fff`} 
+                        className="w-12 h-12 rounded-full border border-zinc-800 object-cover"
+                      />
+                      <span className={cn(
+                        "absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-900",
+                        u.status === 'online' ? "bg-green-500" : "bg-zinc-600"
+                      )} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm truncate text-dz-gold">{u.firstName} {u.lastName}</p>
+                      <p className="text-[10px] text-zinc-400 truncate">{u.specialty} • {u.level}</p>
+                      <p className="text-[9px] text-zinc-500">{u.wilaya} • {u.experience} سنوات خبرة</p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-xs truncate group-hover:text-dz-purple transition-colors">{u.firstName} {u.lastName}</p>
-                    <p className="text-[9px] text-zinc-500 truncate">{u.specialty} | {u.level}</p>
-                  </div>
+                  <button 
+                    onClick={() => {
+                      setSelectedChatUser(u);
+                      setIsChatOpen(true);
+                    }}
+                    className="w-full py-1.5 bg-dz-purple/10 hover:bg-dz-purple text-dz-purple hover:text-white rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-2"
+                  >
+                    <MessageCircle className="w-3 h-3" /> تواصل الآن
+                  </button>
                 </div>
               ))}
             </div>

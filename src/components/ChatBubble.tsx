@@ -20,14 +20,21 @@ export default function ChatBubble({ isOpen, setIsOpen, selectedUser, setSelecte
   const dragControls = useDragControls();
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Fetch online users for the selection list
+  // Fetch all users who have completed their profile
   useEffect(() => {
-    const q = query(collection(db, 'users'), where('status', '==', 'online'));
+    const q = query(collection(db, 'users'), limit(50));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setOnlineUsers(snapshot.docs
+      const users = snapshot.docs
         .map(doc => ({ uid: doc.id, ...doc.data() }))
-        .filter(u => u.uid !== user?.uid)
-      );
+        .filter(u => u.uid !== user?.uid && !u.incomplete);
+      
+      const sortedUsers = [...users].sort((a: any, b: any) => {
+        if (a.status === 'online' && b.status !== 'online') return -1;
+        if (a.status !== 'online' && b.status === 'online') return 1;
+        return 0;
+      });
+      
+      setOnlineUsers(sortedUsers);
     });
     return () => unsubscribe();
   }, [user]);
@@ -153,8 +160,11 @@ export default function ChatBubble({ isOpen, setIsOpen, selectedUser, setSelecte
                         <h3 className="font-bold text-lg leading-tight">
                           {selectedUser.gender === 'female' ? 'الأستاذة' : 'الأستاذ'} {selectedUser.firstName} {selectedUser.lastName}
                         </h3>
-                        <p className="text-[10px] opacity-80">
-                          {selectedUser.wilaya} | {selectedUser.specialty}
+                        <p className="text-[10px] opacity-90 font-medium">
+                          {selectedUser.specialty} • {selectedUser.level} • {selectedUser.wilaya}
+                        </p>
+                        <p className="text-[9px] opacity-70">
+                          الخبرة: {selectedUser.experience} سنوات
                         </p>
                       </div>
                     </div>
@@ -244,13 +254,17 @@ export default function ChatBubble({ isOpen, setIsOpen, selectedUser, setSelecte
                         <div className="relative">
                           <img 
                             src={u.photoURL || `https://ui-avatars.com/api/?name=${u.firstName}+${u.lastName}&background=6b21a8&color=fff`} 
-                            className="w-12 h-12 rounded-full border border-zinc-800"
+                            className="w-12 h-12 rounded-full border border-zinc-800 object-cover"
                           />
-                          <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-zinc-900" />
+                          <span className={cn(
+                            "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-zinc-900",
+                            u.status === 'online' ? "bg-green-500" : "bg-zinc-600"
+                          )} />
                         </div>
-                        <div>
-                          <p className="font-bold text-sm">{u.firstName} {u.lastName}</p>
-                          <p className="text-[10px] text-zinc-500">{u.specialty} | {u.level}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-sm truncate text-dz-gold">{u.firstName} {u.lastName}</p>
+                          <p className="text-[10px] text-zinc-400 truncate">{u.specialty} • {u.level} • {u.wilaya}</p>
+                          <p className="text-[9px] text-zinc-500">الخبرة: {u.experience} سنوات</p>
                         </div>
                       </div>
                     ))
