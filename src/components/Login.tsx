@@ -35,15 +35,22 @@ export default function Login() {
       const user = result.user;
       
       const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (!userDoc.exists()) {
+      const userData = userDoc.data();
+      
+      // If document doesn't exist or is missing critical fields
+      if (!userDoc.exists() || !userData?.email) {
+        const names = user.displayName?.split(' ') || [];
         await setDoc(doc(db, 'users', user.uid), {
-          firstName: user.displayName?.split(' ')[0] || '',
-          lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
+          uid: user.uid,
+          name: user.displayName || 'أستاذ جديد',
+          firstName: names[0] || '',
+          lastName: names.slice(1).join(' ') || '',
           email: user.email,
           photoURL: user.photoURL,
           createdAt: new Date().toISOString(),
-          incomplete: true
-        });
+          incomplete: true,
+          status: 'online'
+        }, { merge: true });
       }
     } catch (err: any) {
       console.error("Login Error:", err);
@@ -53,6 +60,8 @@ export default function Login() {
         setError('تم حظر النافذة المنبثقة. يرجى السماح بالنوافذ المنبثقة أو فتح التطبيق في نافذة جديدة.');
       } else if (err.code === 'auth/popup-closed-by-user') {
         setError('تم إغلاق نافذة تسجيل الدخول قبل إتمام العملية.');
+      } else if (err.code === 'auth/network-request-failed') {
+        setError('فشل الاتصال بالشبكة. يرجى التأكد من اتصالك بالإنترنت، أو حاول فتح التطبيق في نافذة جديدة (Open in new tab).');
       } else {
         setError('حدث خطأ أثناء تسجيل الدخول: ' + err.message);
       }
@@ -68,24 +77,44 @@ export default function Login() {
 
     try {
       if (isSignup) {
+        // 1. Create the user in Firebase Auth
         const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
+        const user = userCredential.user;
+
+        // 2. Save the user data to Firestore "users" collection
+        // This ensures the user appears in the users list immediately
+        await setDoc(doc(db, "users", user.uid), {
+          uid: user.uid,
+          email: formData.email,
+          name: `${formData.firstName} ${formData.lastName}`.trim(),
+          subject: formData.specialty,
+          wilaya: formData.wilaya,
           firstName: formData.firstName,
           lastName: formData.lastName,
-          email: formData.email,
-          wilaya: formData.wilaya,
           specialty: formData.specialty,
           level: formData.level,
           experience: formData.experience,
           gender: formData.gender,
           createdAt: new Date().toISOString(),
-          incomplete: false
+          incomplete: false,
+          status: 'online'
         });
+        
+        console.log("User saved to Firestore successfully:", user.uid);
       } else {
         await signInWithEmailAndPassword(auth, formData.email, formData.password);
       }
     } catch (err: any) {
-      setError(err.message);
+      console.error("Auth Error:", err);
+      if (err.code === 'auth/email-already-in-use') {
+        setError('هذا البريد الإلكتروني مستخدم بالفعل.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('كلمة المرور ضعيفة جداً.');
+      } else if (err.code === 'auth/network-request-failed') {
+        setError('فشل الاتصال بالشبكة. يرجى التأكد من اتصالك بالإنترنت.');
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -295,7 +324,20 @@ export default function Login() {
             />
           </div>
 
-          {error && <p className="text-dz-red text-sm text-center">{error}</p>}
+          {error && (
+            <div className="text-dz-red text-sm text-center space-y-2">
+              <p>{error}</p>
+              {(error.includes('network-request-failed') || error.includes('popup-blocked')) && (
+                <button 
+                  type="button"
+                  onClick={() => window.open(window.location.href, '_blank')}
+                  className="text-dz-gold underline block mx-auto hover:text-white transition-colors"
+                >
+                  فتح التطبيق في نافذة مستقلة (اضغط هنا)
+                </button>
+              )}
+            </div>
+          )}
 
           <button 
             disabled={loading}

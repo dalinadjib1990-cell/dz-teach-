@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -18,14 +18,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      console.log("Auth State Changed. User UID:", user?.uid);
       setUser(user);
-      if (user) {
-        // Fire and forget online status update
-        updateDoc(doc(db, 'users', user.uid), {
-          status: 'online',
-          lastSeen: new Date().toISOString()
-        }).catch(() => {}); 
-      } else {
+      if (!user) {
         setProfile(null);
         setLoading(false);
       }
@@ -51,12 +46,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       });
 
+      // Update presence and ensure basic info exists
+      const names = user.displayName?.split(' ') || [];
+      const defaultFirstName = names[0] || '';
+      const defaultLastName = names.slice(1).join(' ') || '';
+      
+      console.log("Attempting to save user profile for:", user.uid);
+      
+      setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        email: user.email,
+        // Only set these if they don't exist to avoid overwriting profile edits
+        name: profile?.name || user.displayName || `${defaultFirstName} ${defaultLastName}`.trim() || 'أستاذ جديد',
+        firstName: profile?.firstName || defaultFirstName,
+        lastName: profile?.lastName || defaultLastName,
+        photoURL: profile?.photoURL || user.photoURL,
+        subject: profile?.subject || '',
+        wilaya: profile?.wilaya || '',
+        status: 'online',
+        lastSeen: new Date().toISOString()
+      }, { merge: true })
+      .then(() => console.log("User presence and profile saved successfully for:", user.uid))
+      .catch((err) => {
+        console.error("Error saving user profile:", err);
+        // If it's a permission error, it might be because the rules are not deployed or incorrect
+        if (err.code === 'permission-denied') {
+          console.error("Permission denied. Check Firestore rules.");
+        }
+      });
+
       // Handle disconnect
       const handleDisconnect = () => {
-        updateDoc(doc(db, 'users', user.uid), {
+        setDoc(doc(db, 'users', user.uid), {
           status: 'offline',
           lastSeen: new Date().toISOString()
-        });
+        }, { merge: true });
       };
 
       window.addEventListener('beforeunload', handleDisconnect);

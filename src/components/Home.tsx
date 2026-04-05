@@ -3,11 +3,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { auth, db } from '../firebase';
 import { signOut } from 'firebase/auth';
-import { collection, addDoc, query, orderBy, onSnapshot, updateDoc, doc, deleteDoc, arrayUnion, arrayRemove, getDocs, where, limit } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, updateDoc, setDoc, doc, deleteDoc, arrayUnion, arrayRemove, getDocs, where, limit, getDocFromCache, getDocFromServer } from 'firebase/firestore';
 import { 
   Bell, MessageCircle, UserPlus, LogOut, Users, MoreHorizontal, 
   Heart, MessageSquare, Share2, Send, Smile, ThumbsUp, Laugh, Frown, Angry, Zap,
-  Settings, Edit2, Trash2, Globe, Lock, User as UserIcon, X
+  Settings, Edit2, Trash2, Globe, Lock, User as UserIcon, X, AlertCircle
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ar } from 'date-fns/locale';
@@ -25,16 +25,58 @@ export default function Home() {
   const [isUsersListOpen, setIsUsersListOpen] = useState(false);
   const [selectedChatUser, setSelectedChatUser] = useState<any>(null);
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+
+  // Test Firestore connection on boot
+  useEffect(() => {
+    async function testConnection() {
+      try {
+        // Try to fetch a dummy doc to test connection
+        await getDocFromServer(doc(db, '_connection_test_', 'test'));
+        console.log("Firestore connection test successful");
+        setConnectionError(null);
+      } catch (error: any) {
+        console.error("Firestore connection test failed:", error);
+        if (error.message?.includes('the client is offline')) {
+          setConnectionError("يبدو أن التطبيق غير متصل بقاعدة البيانات. يرجى التحقق من إعدادات Firebase.");
+        } else if (error.code === 'permission-denied') {
+          // This is actually a good sign that we are connected but just don't have permission for this specific path
+          console.log("Connected but permission denied for test path (expected)");
+          setConnectionError(null);
+        } else {
+          setConnectionError("حدث خطأ في الاتصال بقاعدة البيانات: " + error.message);
+        }
+      }
+    }
+    testConnection();
+  }, []);
 
   useEffect(() => {
-    // Fetch all users who have completed their profile
+    if (!user) {
+      setOnlineUsers([]);
+      return;
+    }
+    
+    console.log("Starting users snapshot listener for user:", user.uid);
+    
+    // Fetch all users to show in suggestions, sorted by online status
     const q = query(collection(db, 'users'), limit(50));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const users = snapshot.docs
-        .map(doc => ({ uid: doc.id, ...doc.data() }))
-        .filter(u => u.uid !== user?.uid && !u.incomplete);
+      console.log("Raw users snapshot size:", snapshot.size);
+      if (snapshot.empty) {
+        console.warn("Users collection is empty or query returned no results");
+      }
       
-      // Sort: online users first, then by creation date
+      const users = snapshot.docs
+        .map(doc => {
+          const data = doc.data();
+          return { uid: doc.id, ...data };
+        })
+        .filter(u => u.uid !== user.uid);
+      
+      console.log("Filtered users count (excluding self):", users.length);
+      
+      // Sort: online users first
       const sortedUsers = [...users].sort((a: any, b: any) => {
         if (a.status === 'online' && b.status !== 'online') return -1;
         if (a.status !== 'online' && b.status === 'online') return 1;
@@ -42,12 +84,15 @@ export default function Home() {
       });
       
       setOnlineUsers(sortedUsers);
+    }, (error) => {
+      console.error("Online Users Snapshot Error:", error);
+      setConnectionError("خطأ في جلب قائمة المستخدمين: " + error.message);
     });
     return () => unsubscribe();
-  }, [user]);
+  }, [user?.uid]);
 
   useEffect(() => {
-    if (!authLoading && profile?.incomplete) {
+    if (!authLoading && (!profile || profile.incomplete)) {
       setIsProfileOpen(true);
     }
   }, [profile, authLoading]);
@@ -86,6 +131,20 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-dz-black">
+      {connectionError && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-md bg-dz-red/90 backdrop-blur-md border border-dz-red/20 p-4 rounded-2xl text-white text-center flex items-center justify-center gap-3 shadow-2xl shadow-dz-red/20 animate-in fade-in slide-in-from-top-4 duration-300">
+          <AlertCircle className="w-6 h-6 shrink-0" />
+          <div className="text-sm font-medium leading-tight">
+            {connectionError}
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="shrink-0 bg-white/20 hover:bg-white/30 p-1.5 rounded-lg transition-colors"
+          >
+            <Zap className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       {/* Navbar */}
       <nav className="sticky top-0 z-50 bg-zinc-900/80 backdrop-blur-md border-b border-zinc-800 px-4 py-2">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -173,9 +232,15 @@ export default function Home() {
                       )} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-sm truncate text-dz-gold">{u.firstName} {u.lastName}</p>
-                      <p className="text-[10px] text-zinc-400 truncate">{u.specialty} • {u.level}</p>
-                      <p className="text-[9px] text-zinc-500">{u.wilaya} • {u.experience} سنوات خبرة</p>
+                      <p className="font-bold text-sm truncate text-dz-gold">
+                        {u.name || (u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : (u.displayName || 'أستاذ جديد'))}
+                      </p>
+                      <p className="text-[10px] text-zinc-400 truncate">
+                        {u.incomplete ? 'بانتظار إكمال الملف' : `${u.subject || u.specialty} • ${u.level}`}
+                      </p>
+                      <p className="text-[9px] text-zinc-500">
+                        {u.incomplete ? 'سجل دخول للتو' : `${u.wilaya} • ${u.experience} سنوات خبرة`}
+                      </p>
                     </div>
                   </div>
                   <button 
@@ -201,6 +266,42 @@ export default function Home() {
 
         {/* Main Feed */}
         <div className="lg:col-span-6 space-y-6">
+          {/* Mobile Suggested Teachers (Horizontal Scroll) */}
+          <div className="lg:hidden bg-zinc-900 rounded-2xl p-4 border border-zinc-800">
+            <h3 className="text-dz-gold font-bold mb-3 text-sm flex items-center gap-2">
+              <UserPlus className="w-4 h-4" /> أساتذة قد تعرفهم
+            </h3>
+            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+              {onlineUsers.length === 0 && (
+                <p className="text-[10px] text-zinc-500 py-2">لا يوجد أساتذة متاحون حالياً</p>
+              )}
+              {onlineUsers.map(u => (
+                <div 
+                  key={u.uid}
+                  onClick={() => {
+                    setSelectedChatUser(u);
+                    setIsChatOpen(true);
+                  }}
+                  className="flex-shrink-0 flex flex-col items-center gap-1 w-20"
+                >
+                  <div className="relative">
+                    <img 
+                      src={u.photoURL || `https://ui-avatars.com/api/?name=${u.firstName}+${u.lastName}&background=6b21a8&color=fff`} 
+                      className="w-14 h-14 rounded-full border-2 border-dz-purple/30 object-cover"
+                    />
+                    <span className={cn(
+                      "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-zinc-900",
+                      u.status === 'online' ? "bg-green-500" : "bg-zinc-600"
+                    )} />
+                  </div>
+                  <p className="text-[10px] font-bold text-center truncate w-full text-dz-gold">
+                    {u.name?.split(' ')[0] || u.firstName || u.email?.split('@')[0] || 'أستاذ جديد'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Create Post */}
           <div className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800 shadow-xl">
             <div className="flex gap-3 mb-4">
@@ -277,17 +378,15 @@ export default function Home() {
         setSelectedUser={setSelectedChatUser}
       />
 
-      {/* Users List Modal */}
       <AnimatePresence>
         {isUsersListOpen && (
           <UsersListModal 
             onClose={() => setIsUsersListOpen(false)} 
-            onSelectUser={(u) => {
+            onSelectUser={(u: any) => {
               setSelectedChatUser(u);
               setIsChatOpen(true);
               setIsUsersListOpen(false);
             }}
-            onlineUsers={onlineUsers}
           />
         )}
       </AnimatePresence>
@@ -302,18 +401,23 @@ export default function Home() {
   );
 }
 
-function UsersListModal({ onClose, onSelectUser, onlineUsers }: any) {
+function UsersListModal({ onClose, onSelectUser }: any) {
+  const { user } = useAuth();
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user) return;
     const q = query(collection(db, 'users'), limit(50));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setAllUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })));
+      const users = snapshot.docs
+        .map(doc => ({ uid: doc.id, ...doc.data() }))
+        .filter(u => u.uid !== user.uid);
+      setAllUsers(users);
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [user?.uid]);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -351,8 +455,8 @@ function UsersListModal({ onClose, onSelectUser, onlineUsers }: any) {
                     )} />
                   </div>
                   <div>
-                    <p className="font-bold text-sm">{u.firstName} {u.lastName}</p>
-                    <p className="text-[10px] text-zinc-500">{u.specialty} | {u.level}</p>
+                    <p className="font-bold text-sm">{u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim()}</p>
+                    <p className="text-[10px] text-zinc-500">{u.subject || u.specialty} | {u.level} | {u.wilaya}</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -378,7 +482,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
     firstName: profile?.firstName || '',
     lastName: profile?.lastName || '',
     wilaya: profile?.wilaya || WILAYAS[0],
-    specialty: profile?.specialty || SPECIALTIES[0],
+    specialty: profile?.subject || profile?.specialty || SPECIALTIES[0],
     level: profile?.level || LEVELS[0],
     experience: profile?.experience || 0,
     gender: profile?.gender || 'male'
@@ -389,13 +493,17 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
     e.preventDefault();
     setLoading(true);
     try {
-      await updateDoc(doc(db, 'users', user!.uid), {
+      await setDoc(doc(db, 'users', user!.uid), {
         ...formData,
+        name: `${formData.firstName} ${formData.lastName}`.trim(),
+        subject: formData.specialty,
         incomplete: false
-      });
+      }, { merge: true });
+      alert("تم حفظ البيانات بنجاح!");
       onClose();
     } catch (err) {
-      console.error(err);
+      console.error("Profile Update Error:", err);
+      alert("حدث خطأ أثناء حفظ البيانات. يرجى المحاولة مرة أخرى.");
     } finally {
       setLoading(false);
     }
@@ -421,55 +529,79 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
 
         <form onSubmit={handleUpdate} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <input 
-              type="text" placeholder="الاسم" required className="bg-black/50 border border-zinc-800 rounded-xl p-2.5 outline-none focus:border-dz-purple"
-              value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})}
-            />
-            <input 
-              type="text" placeholder="اللقب" required className="bg-black/50 border border-zinc-800 rounded-xl p-2.5 outline-none focus:border-dz-purple"
-              value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})}
-            />
+            <div className="space-y-1">
+              <label className="text-xs text-zinc-500 mr-1">الاسم</label>
+              <input 
+                type="text" placeholder="الاسم" required className="w-full bg-black/50 border border-zinc-800 rounded-xl p-2.5 outline-none focus:border-dz-purple text-sm"
+                value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-zinc-500 mr-1">اللقب</label>
+              <input 
+                type="text" placeholder="اللقب" required className="w-full bg-black/50 border border-zinc-800 rounded-xl p-2.5 outline-none focus:border-dz-purple text-sm"
+                value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})}
+              />
+            </div>
           </div>
-          <select 
-            className="w-full bg-black/50 border border-zinc-800 rounded-xl p-2.5 outline-none focus:border-dz-purple"
-            value={formData.wilaya} onChange={e => setFormData({...formData, wilaya: e.target.value})}
-          >
-            {WILAYAS.map(w => <option key={w} value={w}>{w}</option>)}
-          </select>
-          <div className="grid grid-cols-2 gap-4">
+
+          <div className="space-y-1">
+            <label className="text-xs text-zinc-500 mr-1">الولاية</label>
             <select 
-              className="bg-black/50 border border-zinc-800 rounded-xl p-2.5 outline-none focus:border-dz-purple"
-              value={formData.specialty} onChange={e => setFormData({...formData, specialty: e.target.value})}
+              className="w-full bg-black/50 border border-zinc-800 rounded-xl p-2.5 outline-none focus:border-dz-purple text-sm"
+              value={formData.wilaya} onChange={e => setFormData({...formData, wilaya: e.target.value})}
             >
-              {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select 
-              className="bg-black/50 border border-zinc-800 rounded-xl p-2.5 outline-none focus:border-dz-purple"
-              value={formData.level} onChange={e => setFormData({...formData, level: e.target.value})}
-            >
-              {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+              {WILAYAS.map(w => <option key={w} value={w}>{w}</option>)}
             </select>
           </div>
+
           <div className="grid grid-cols-2 gap-4">
-            <input 
-              type="number" placeholder="سنوات الخبرة" required className="w-full bg-black/50 border border-zinc-800 rounded-xl p-2.5 outline-none focus:border-dz-purple"
-              value={formData.experience || ''} onChange={e => setFormData({...formData, experience: parseInt(e.target.value) || 0})}
-            />
-            <div className="flex gap-2">
-              <button 
-                type="button"
-                onClick={() => setFormData({...formData, gender: 'male'})}
-                className={cn("flex-1 rounded-xl border text-xs", formData.gender === 'male' ? "border-dz-purple bg-dz-purple/20" : "border-zinc-800")}
+            <div className="space-y-1">
+              <label className="text-xs text-zinc-500 mr-1">الاختصاص</label>
+              <select 
+                className="w-full bg-black/50 border border-zinc-800 rounded-xl p-2.5 outline-none focus:border-dz-purple text-sm"
+                value={formData.specialty} onChange={e => setFormData({...formData, specialty: e.target.value})}
               >
-                ذكر
-              </button>
-              <button 
-                type="button"
-                onClick={() => setFormData({...formData, gender: 'female'})}
-                className={cn("flex-1 rounded-xl border text-xs", formData.gender === 'female' ? "border-dz-magenta bg-dz-magenta/20" : "border-zinc-800")}
+                {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-zinc-500 mr-1">الطور</label>
+              <select 
+                className="w-full bg-black/50 border border-zinc-800 rounded-xl p-2.5 outline-none focus:border-dz-purple text-sm"
+                value={formData.level} onChange={e => setFormData({...formData, level: e.target.value})}
               >
-                أنثى
-              </button>
+                {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs text-zinc-500 mr-1">سنوات الخبرة</label>
+              <input 
+                type="number" placeholder="سنوات الخبرة" required className="w-full bg-black/50 border border-zinc-800 rounded-xl p-2.5 outline-none focus:border-dz-purple text-sm"
+                value={formData.experience || ''} onChange={e => setFormData({...formData, experience: parseInt(e.target.value) || 0})}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-zinc-500 mr-1">الجنس</label>
+              <div className="flex gap-2 h-[42px]">
+                <button 
+                  type="button"
+                  onClick={() => setFormData({...formData, gender: 'male'})}
+                  className={cn("flex-1 rounded-xl border text-xs transition-all", formData.gender === 'male' ? "border-dz-purple bg-dz-purple/20 text-dz-purple font-bold" : "border-zinc-800 text-zinc-500")}
+                >
+                  ذكر
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setFormData({...formData, gender: 'female'})}
+                  className={cn("flex-1 rounded-xl border text-xs transition-all", formData.gender === 'female' ? "border-dz-magenta bg-dz-magenta/20 text-dz-magenta font-bold" : "border-zinc-800 text-zinc-500")}
+                >
+                  أنثى
+                </button>
+              </div>
             </div>
           </div>
           <button 
@@ -541,10 +673,10 @@ function PostCard({ post }: any) {
     >
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src={post.authorPhoto || `https://ui-avatars.com/api/?name=${post.authorName}&background=6b21a8&color=fff`} alt="" className="w-10 h-10 rounded-full" />
+          <img src={post.authorPhoto || `https://ui-avatars.com/api/?name=${post.authorName || 'User'}&background=6b21a8&color=fff`} alt="" className="w-10 h-10 rounded-full" />
           <div>
             <h4 className="text-sm font-bold">
-              {(!post.authorName || post.authorName === 'undefined undefined') ? 'أستاذ جزائري' : post.authorName}
+              {(!post.authorName || post.authorName === 'undefined undefined' || post.authorName === ' ') ? 'أستاذ جزائري' : post.authorName}
             </h4>
             <p className="text-[10px] text-zinc-500">
               {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true, locale: ar })}

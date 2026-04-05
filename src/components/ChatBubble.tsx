@@ -20,13 +20,25 @@ export default function ChatBubble({ isOpen, setIsOpen, selectedUser, setSelecte
   const dragControls = useDragControls();
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Fetch all users who have completed their profile
+  // Fetch all users to show in selection list, sorted by online status
   useEffect(() => {
+    if (!user) {
+      setOnlineUsers([]);
+      return;
+    }
+    
     const q = query(collection(db, 'users'), limit(50));
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      console.log("Chat Raw users snapshot size:", snapshot.size);
       const users = snapshot.docs
-        .map(doc => ({ uid: doc.id, ...doc.data() }))
-        .filter(u => u.uid !== user?.uid && !u.incomplete);
+        .map(doc => {
+          const data = doc.data();
+          console.log(`User ${doc.id}:`, data);
+          return { uid: doc.id, ...data };
+        })
+        .filter(u => u.uid !== user.uid);
+      
+      console.log("Chat Filtered users count:", users.length);
       
       const sortedUsers = [...users].sort((a: any, b: any) => {
         if (a.status === 'online' && b.status !== 'online') return -1;
@@ -35,9 +47,11 @@ export default function ChatBubble({ isOpen, setIsOpen, selectedUser, setSelecte
       });
       
       setOnlineUsers(sortedUsers);
+    }, (error) => {
+      console.error("Chat User Selection Snapshot Error:", error);
     });
     return () => unsubscribe();
-  }, [user]);
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!user || !selectedUser) return;
@@ -158,10 +172,10 @@ export default function ChatBubble({ isOpen, setIsOpen, selectedUser, setSelecte
                       </div>
                       <div>
                         <h3 className="font-bold text-lg leading-tight">
-                          {selectedUser.gender === 'female' ? 'الأستاذة' : 'الأستاذ'} {selectedUser.firstName} {selectedUser.lastName}
+                          {selectedUser.gender === 'female' ? 'الأستاذة' : 'الأستاذ'} {selectedUser.name || `${selectedUser.firstName || ''} ${selectedUser.lastName || ''}`.trim() || selectedUser.email?.split('@')[0] || 'جديد'}
                         </h3>
                         <p className="text-[10px] opacity-90 font-medium">
-                          {selectedUser.specialty} • {selectedUser.level} • {selectedUser.wilaya}
+                          {selectedUser.subject || selectedUser.specialty} • {selectedUser.level} • {selectedUser.wilaya}
                         </p>
                         <p className="text-[9px] opacity-70">
                           الخبرة: {selectedUser.experience} سنوات
@@ -262,9 +276,15 @@ export default function ChatBubble({ isOpen, setIsOpen, selectedUser, setSelecte
                           )} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-bold text-sm truncate text-dz-gold">{u.firstName} {u.lastName}</p>
-                          <p className="text-[10px] text-zinc-400 truncate">{u.specialty} • {u.level} • {u.wilaya}</p>
-                          <p className="text-[9px] text-zinc-500">الخبرة: {u.experience} سنوات</p>
+                          <p className="font-bold text-sm truncate text-dz-gold">
+                            {u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || (u.displayName || 'أستاذ جديد')}
+                          </p>
+                          <p className="text-[10px] text-zinc-400 truncate">
+                            {u.incomplete ? 'بانتظار إكمال الملف' : `${u.subject || u.specialty} • ${u.level}`}
+                          </p>
+                          <p className="text-[9px] text-zinc-500">
+                            {u.incomplete ? 'سجل دخول للتو' : `الخبرة: ${u.experience} سنوات`}
+                          </p>
                         </div>
                       </div>
                     ))
